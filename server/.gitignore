@@ -1,0 +1,20 @@
+# gitignore for flask
+__pycache__/
+instance/
+.DS_Store
+
+# virtual environments
+venv/
+env/
+ENV/
+penv/
+pyenv/
+
+# logs
+*.log
+*.log.*
+*.log-*
+
+# database
+*.sqlite3
+*.db
