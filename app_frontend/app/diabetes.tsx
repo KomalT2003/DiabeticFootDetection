@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { act, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -10,13 +10,13 @@ import {
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-
 interface Question {
   id: string;
   text: string;
   type: 'single' | 'multiple';
   options: string[];
   selectedOptions?: string[];
+  isObservation?: boolean;
 }
 
 const DIABETES_QUESTIONS: Question[] = [{
@@ -27,14 +27,15 @@ const DIABETES_QUESTIONS: Question[] = [{
 },
 {
   id: 'close_family',
-  text: 'Do you have a family history of diabetes? A close relation like parent, sibling, grandparent',
+  text: 'A close relation like parent, sibling, grandparent has/had diabetes?',
   type: 'single',
   options: ['Yes', 'No']
 },
 {
   id: 'far_family',
-  text: 'Do you have a family history of diabetes? A far relation like cousin, aunt, uncle',
+  text: 'A far relation like cousin, aunt, uncle has/had diabetes?',
   type: 'single',
+  
   options: ['Yes', 'No']
 },
 {
@@ -88,8 +89,8 @@ const DIABETES_QUESTIONS: Question[] = [{
 {
   id: 'diet',
   text: 'Select your typical diet patterns:',
-  type: 'single',
-  options: ['High in processed foods', 'High in sugary drinks', 'Low in fruits and vegetables', 'Balanced diet']
+  type: 'multiple',
+  options: ['High in processed foods', 'High in sugary drinks', 'Low in fruits and vegetables', 'High in fried food', 'High in outside food']
 },
 {
   id: 'symptom_fatigue',
@@ -99,25 +100,25 @@ const DIABETES_QUESTIONS: Question[] = [{
 },
 {
   id: 'symptom_blurred_vision',
-  text: 'Do you have blurred vision?',
+  text: 'Do you have vision problems other than cataract (eg: blurred vision)?',
   type: 'single',
   options: ['Yes', 'No']
 },
 {
   id: 'symptom_fruity_breath',
-  text: 'Do you notice fruity breath odor?',
+  text: 'Do you notice fruity breath odor sometimes?',
   type: 'single',
   options: ['Yes', 'No']
 },
 {
   id: 'symptom_excessive_thirst',
-  text: 'Do you feel excessive thirst?',
+  text: 'Do you feel excessive thirst these days?',
   type: 'single',
   options: ['Yes', 'No']
 },
 {
   id: 'symptom_increased_urination',
-  text: 'Do you experience increased urination?',
+  text: 'Do you experience increased urination these days sometimes?',
   type: 'single',
   options: ['Yes', 'No']
 },
@@ -126,9 +127,15 @@ const DIABETES_QUESTIONS: Question[] = [{
   text: 'Do you feel nausea frequently?',
   type: 'single',
   options: ['Yes', 'No']
+},
+{
+  id: 'observed_diabetes',
+  text: 'Did the patient have diabetes?',
+  type: 'single',
+  options: ['Yes', 'No', 'Not sure'],
+  isObservation: true  // Added this flag
 }
 ];
-
 
 export default function DiabetesAssessmentScreen() {
   const [questions, setQuestions] = useState<Question[]>(DIABETES_QUESTIONS);
@@ -183,12 +190,47 @@ export default function DiabetesAssessmentScreen() {
         alert('Please enter your username');
         return;
       }
+  
       const response = await axios.post(
-        'http://192.168.128.114:5000/predict_diabetes',
+        'http://192.168.48.114:5000/predict_diabetes',
         formData
       );
+      const diabetes_risk_score = response.data.score.toFixed(2) * 100;
+
+      // add diabetes_risk_score to post 
+      const add_record = await axios.post(
+        'http://192.168.48.114:5000/add_diabetic_detection',
+        {
+          username: formData.username,
+          high_glucose: formData.high_glucose,
+          close_family: formData.close_family,
+          far_family: formData.far_family,
+          waist_circumference: formData.waist_circumference,
+          kidney: formData.kidney,
+          thyroid: formData.thyroid,
+          blood_pressure: formData.blood_pressure,
+          cholestral: formData.cholestral,
+          heart_disease: formData.heart_disease,
+          smoke: formData.smoke,
+          alcohol: formData.alcohol,
+          diet: formData.diet,
+          symptom_fatigue: formData.symptom_fatigue,
+          symptom_blurred_vision: formData.symptom_blurred_vision,
+          symptom_fruity_breath: formData.symptom_fruity_breath,
+          symptom_excessive_thirst: formData.symptom_excessive_thirst,
+          symptom_increased_urination: formData.symptom_increased_urination,
+          symptom_nausea: formData.symptom_nausea,
+          diabetes_risk_score: diabetes_risk_score,
+          observed_diabetes: formData.observed_diabetes
+        },
+      );
+
+      console.log("posted added record with score")
+
+
       // show in percentage
       const score = `${response.data.score.toFixed(2) * 100}%`;
+
       setAssessmentResult(score);
       setModalVisible(true);
     } catch (error) {
@@ -224,27 +266,29 @@ export default function DiabetesAssessmentScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Diabetes Risk Assessment</Text>
+    <Text style={styles.title}>Diabetes Risk Assessment</Text>
 
-      {questions.map((question) => (
-        <View key={question.id} style={styles.questionContainer}>
-          <Text style={styles.questionText}>{question.text}</Text>
-          <View style={styles.optionsContainer}>
-            {renderQuestionOptions(question)}
-          </View>
+    {questions.map((question) => (
+      <View key={question.id} style={styles.questionContainer}>
+        <Text style={question.isObservation ? styles.observationQuestionText : styles.questionText}>
+          {question.text}
+        </Text>
+        <View style={styles.optionsContainer}>
+          {renderQuestionOptions(question)}
         </View>
-      ))}
+      </View>
+    ))}
 
-      <TouchableOpacity
-        style={[
-          styles.submitButton,
-          !isFormComplete() && styles.disabledButton,
-        ]}
-        onPress={submitAssessment}
-        disabled={!isFormComplete()}
-      >
-        <Text style={styles.submitButtonText}>Submit Assessment</Text>
-      </TouchableOpacity>
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        !isFormComplete() && styles.disabledButton,
+      ]}
+      onPress={submitAssessment}
+      disabled={!isFormComplete()}
+    >
+      <Text style={styles.submitButtonText}>Submit Assessment</Text>
+    </TouchableOpacity>
 
       <Modal
         animationType="slide"
@@ -285,6 +329,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 20,
   },
+  observationTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF0000', // Teal color
+    textAlign: 'center',
+    marginVertical: 20,
+  },
   questionContainer: {
     backgroundColor: 'white',
     borderRadius: 10,
@@ -301,6 +352,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#008080', // Teal color
     marginBottom: 10,
+  },
+  actualquestionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF0000', // Teal color
+    marginBottom: 10
   },
   optionsContainer: {
     flexDirection: 'column',
@@ -355,6 +412,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     width: '80%',
+  },
+  observationQuestionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF0000',
+    marginBottom: 10,
   },
   modalTitle: {
     fontSize: 22,

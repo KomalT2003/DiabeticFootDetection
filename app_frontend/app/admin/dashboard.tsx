@@ -4,89 +4,413 @@ import {
   Text, 
   FlatList, 
   StyleSheet, 
-  TouchableOpacity 
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  ActivityIndicator,
+  TextInput,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
-interface UserAssessment {
+// Interfaces
+interface User {
   id: string;
-  name: string;
-  demographicScore?: number;
-  diabetesRiskScore?: number;
-  footCareScore?: number;
-  completedAssessments: number;
+  username: string;
+  age: number;
+  gender: string;
+  occupation: string;
+  height: number;
+  weight: number;
+  physical_activity: string;
+  timestamp: string;
 }
 
+interface DiabetesAssessment {
+  username: string;
+  observed_diabetes: string;
+  high_glucose: string;
+  close_family: string;
+  far_family: string;
+  waist_circumference: number;
+  kidney: string;
+  thyroid: string;
+  blood_pressure: string;
+  cholestral: string;
+  heart_disease: string;
+  smoke: string;
+  alcohol: string;
+  diet: string;
+  symptom_fatigue: string;
+  symptom_blurred_vision: string;
+  symptom_fruiity_breath: string;
+  symptom_excessive_thirst: string;
+  symptom_increased_urination: string;
+  symptom_nausea: string;
+  diabetes_risk_score: number;
+}
+
+interface FootAssessment {
+  username: string;
+  observed_foot: string;
+  history_amputation: string;
+  history_foot_ulcer: string;
+  history_calf_pain: string;
+  history_healing_wound: string;
+  redness: number;
+  swelling: number;
+  pain: number;
+  numbness: number;
+  sensation: number;
+  recent_cut: string;
+  foot_risk_score: number;
+}
+
+interface ValidationResult {
+  username: string;
+  assessment_type: 'diabetes' | 'foot';
+  is_correct: boolean;
+  risk_rating: number;
+  feedback: string;
+  validated_at?: string;
+}
+
+interface UserDetails {
+  user: User;
+  diabetesAssessment?: DiabetesAssessment;
+  footAssessment?: FootAssessment;
+  diabetesValidation?: ValidationResult;
+  footValidation?: ValidationResult;
+}
+
+const VIEWS = {
+  DEMOGRAPHICS: 'demographics',
+  DIABETES: 'diabetes',
+  FOOT: 'foot'
+};
+
 export default function AdminDashboardScreen() {
-  const [users, setUsers] = useState<UserAssessment[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [currentView, setCurrentView] = useState(VIEWS.DEMOGRAPHICS);
   const router = useRouter();
   const { logout } = useAuth();
 
   useEffect(() => {
-    fetchUserAssessments();
+    fetchUsers();
   }, []);
 
-  const fetchUserAssessments = async () => {
+  const fetchUsers = async () => {
     try {
-      // Mock data - replace with actual backend call
-      const mockUsers: UserAssessment[] = [
-        {
-          id: '1',
-          name: 'Sanika',
-          demographicScore: 75,
-          diabetesRiskScore: 45,
-          footCareScore: 60,
-          completedAssessments: 3
-        },
-        {
-          id: '2',
-          name: 'Komal',
-          demographicScore: 80,
-          diabetesRiskScore: 30,
-          footCareScore: 55,
-          completedAssessments: 3
-        }
-      ];
-
-      // Uncomment for actual backend call
-      // const response = await axios.get('http://your-backend-url/admin/user-assessments');
-      // setUsers(response.data);
-
-      setUsers(mockUsers);
+      const response = await axios.get('http://192.168.48.114:5000/users');
+      setUsers(response.data);
     } catch (error) {
-      console.error('Failed to fetch user assessments', error);
+      console.error('Failed to fetch users', error);
+      Alert.alert('Error', 'Failed to fetch users');
     }
   };
 
-  const renderUserItem = ({ item }: { item: UserAssessment }) => (
-    <TouchableOpacity style={styles.userCard}>
-      <View style={styles.userHeader}>
-        <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.assessmentCount}>
-          Completed: {item.completedAssessments}/3
-        </Text>
+  const fetchUserDetails = async (username: string) => {
+    setLoading(true);
+    try {
+      const [diabetesResponse, footResponse] = await Promise.all([
+        axios.post('http://192.168.48.114:5000/get_diabetic_detection', { username }),
+        axios.post('http://192.168.48.114:5000/get_diabetic_foot', { username }),
+      ]);
+
+      const userDetails: UserDetails = {
+        user: users.find(u => u.username === username)!,
+        diabetesAssessment: diabetesResponse.data,
+        footAssessment: footResponse.data,
+        
+      };
+
+      setSelectedUser(userDetails);
+      setModalVisible(true);
+    } catch (error) {
+      console.error('Failed to fetch user details', error);
+      Alert.alert('Error', 'Failed to fetch user details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const ValidationSection = ({ 
+    assessmentType,
+    riskScore,
+    username,
+    existingValidation,
+    onValidationSubmit 
+  }) => {
+    const [isCorrect, setIsCorrect] = useState<boolean>(existingValidation?.is_correct ?? false);
+    const [riskRating, setRiskRating] = useState<number>(existingValidation?.risk_rating ?? 1);
+    const [feedback, setFeedback] = useState<string>(existingValidation?.feedback ?? '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async () => {
+      
+        Alert.alert('Success', 'Validation saved successfully');
+    };
+
+    return (
+      <View style={styles.validationSection}>
+        <Text style={styles.validationTitle}>Validation</Text>
+        
+        <View style={styles.validationRow}>
+          <Text style={styles.validationLabel}>Assessment Accuracy:</Text>
+          <View style={styles.validationButtons}>
+            <TouchableOpacity 
+              style={[
+                styles.validationButton, 
+                isCorrect && styles.validationButtonSelected,
+                { backgroundColor: isCorrect ? '#4CAF50' : undefined }
+              ]}
+              onPress={() => setIsCorrect(true)}
+            >
+              <Text style={[styles.validationButtonText, isCorrect && styles.validationButtonTextSelected]}>✓</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.validationButton, 
+                !isCorrect && styles.validationButtonSelected,
+                { backgroundColor: !isCorrect ? '#F44336' : undefined }
+              ]}
+              onPress={() => setIsCorrect(false)}
+            >
+              <Text style={[styles.validationButtonText, !isCorrect && styles.validationButtonTextSelected]}>✗</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.validationRow}>
+          <Text style={styles.validationLabel}>Risk Rating (1-5):</Text>
+          <View style={styles.ratingContainer}>
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[
+                  styles.ratingButton,
+                  riskRating === rating && styles.ratingButtonSelected
+                ]}
+                onPress={() => setRiskRating(rating)}
+              >
+                <Text style={[
+                  styles.ratingButtonText,
+                  riskRating === rating && styles.ratingButtonTextSelected
+                ]}>
+                  {rating}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.feedbackContainer}>
+          <Text style={styles.validationLabel}>Feedback:</Text>
+          <TextInput
+            style={styles.feedbackInput}
+            multiline
+            numberOfLines={4}
+            value={feedback}
+            onChangeText={setFeedback}
+            placeholder="Enter validation feedback..."
+          />
+        </View>
+
+        <TouchableOpacity 
+          style={styles.submitButton}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.submitButtonText}>Save Validation</Text>
+          )}
+        </TouchableOpacity>
       </View>
-      <View style={styles.scoreContainer}>
-        <View style={styles.scoreItem}>
-          {/* <Text style={styles.scoreLabel}>Demographic</Text>
-          <Text style={styles.scoreValue}>
-            {item.demographicScore || 'N/A'}
-          </Text> */}
+    );
+  };
+
+  const DetailItem = ({ label, value }: { label: string; value: string }) => (
+    <View style={styles.detailItem}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+
+  const UserDetailsModal = () => (
+    <Modal
+      visible={modalVisible}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setModalVisible(false)}
+    >
+      <ScrollView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>User Details</Text>
         </View>
-        <View style={styles.scoreItem}>
-          <Text style={styles.scoreLabel}>Diabetes Risk</Text>
-          <Text style={styles.scoreValue}>
-            {item.diabetesRiskScore || 'N/A'}
-          </Text>
-        </View>
-        <View style={styles.scoreItem}>
-          <Text style={styles.scoreLabel}>Foot Care</Text>
-          <Text style={styles.scoreValue}>
-            {item.footCareScore || 'N/A'}
-          </Text>
-        </View>
+
+        {selectedUser && (
+          <>
+            <View style={styles.navigationButtons}>
+              <TouchableOpacity 
+                style={[styles.navButton, currentView === VIEWS.DEMOGRAPHICS && styles.navButtonActive]}
+                onPress={() => setCurrentView(VIEWS.DEMOGRAPHICS)}
+              >
+                <Text style={[styles.navButtonText, currentView === VIEWS.DEMOGRAPHICS && styles.navButtonTextActive]}>
+                  Demographics
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.navButton, currentView === VIEWS.DIABETES && styles.navButtonActive]}
+                onPress={() => setCurrentView(VIEWS.DIABETES)}
+              >
+                <Text style={[styles.navButtonText, currentView === VIEWS.DIABETES && styles.navButtonTextActive]}>
+                  Diabetes Assessment
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.navButton, currentView === VIEWS.FOOT && styles.navButtonActive]}
+                onPress={() => setCurrentView(VIEWS.FOOT)}
+              >
+                <Text style={[styles.navButtonText, currentView === VIEWS.FOOT && styles.navButtonTextActive]}>
+                  Foot Assessment
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {currentView === VIEWS.DEMOGRAPHICS && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Demographics</Text>
+                <View style={styles.detailsGrid}>
+                  <DetailItem label="Username" value={selectedUser.user.username} />
+                  <DetailItem label="Age" value={selectedUser.user.age.toString()} />
+                  <DetailItem label="Gender" value={selectedUser.user.gender} />
+                  <DetailItem label="Occupation" value={selectedUser.user.occupation} />
+                  <DetailItem label="Height" value={`${selectedUser.user.height} cm`} />
+                  <DetailItem label="Weight" value={`${selectedUser.user.weight} kg`} />
+                  <DetailItem label="Activity Level" value={selectedUser.user.physical_activity} />
+                </View>
+              </View>
+            )}
+
+            {currentView === VIEWS.DIABETES && selectedUser.diabetesAssessment && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Diabetes Assessment</Text>
+                <Text style={styles.riskScore}>
+                  Predicted Risk Score: {(selectedUser.diabetesAssessment.diabetes_risk_score).toFixed(2)}%
+                </Text>
+                <Text style={styles.actualOutcome}>
+                  Actual Observation: {(selectedUser.diabetesAssessment.observed_diabetes)}
+                </Text>
+                <View style={styles.detailsGrid}>
+                  <DetailItem label="High Glucose" value={selectedUser.diabetesAssessment.high_glucose} />
+                  <DetailItem label="Close Family History" value={selectedUser.diabetesAssessment.close_family} />
+                  <DetailItem label="Far Family History" value={selectedUser.diabetesAssessment.far_family} />
+                  <DetailItem label="Waist Circumference" value={`${selectedUser.diabetesAssessment.waist_circumference} cm`} />
+                  <DetailItem label="Kidney Disease" value={selectedUser.diabetesAssessment.kidney} />
+                  <DetailItem label="Thyroid Disease" value={selectedUser.diabetesAssessment.thyroid} />
+                  <DetailItem label="Blood Pressure" value={selectedUser.diabetesAssessment.blood_pressure} />
+                  <DetailItem label="Cholesterol" value={selectedUser.diabetesAssessment.cholestral} />
+                  <DetailItem label="Heart Disease" value={selectedUser.diabetesAssessment.heart_disease} />
+                  <DetailItem label="Smoking" value={selectedUser.diabetesAssessment.smoke} />
+                  <DetailItem label="Alcohol" value={selectedUser.diabetesAssessment.alcohol} />
+                  <DetailItem label="Diet" value={selectedUser.diabetesAssessment.diet} />
+                </View>
+                
+                <Text style={styles.subSectionTitle}>Symptoms</Text>
+                <View style={styles.detailsGrid}>
+                  <DetailItem label="Fatigue" value={selectedUser.diabetesAssessment.symptom_fatigue} />
+                  <DetailItem label="Blurred Vision" value={selectedUser.diabetesAssessment.symptom_blurred_vision} />
+                  <DetailItem label="Fruity Breath" value={selectedUser.diabetesAssessment.symptom_fruiity_breath} />
+                  <DetailItem label="Excessive Thirst" value={selectedUser.diabetesAssessment.symptom_excessive_thirst} />
+                  <DetailItem label="Increased Urination" value={selectedUser.diabetesAssessment.symptom_increased_urination} />
+                  <DetailItem label="Nausea" value={selectedUser.diabetesAssessment.symptom_nausea} />
+                </View>
+
+                <ValidationSection
+                  assessmentType="diabetes"
+                  riskScore={selectedUser.diabetesAssessment.diabetes_risk_score}
+                  username={selectedUser.user.username}
+                  existingValidation={selectedUser.diabetesValidation}
+                  onValidationSubmit={async (validation) => {
+                    await axios.post('http://192.168.48.114:5000/validations', validation);
+                    await fetchUserDetails(selectedUser.user.username);
+                  }}
+                />
+              </View>
+            )}
+
+            {currentView === VIEWS.FOOT && selectedUser.footAssessment && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Foot Assessment</Text>
+                <Text style={styles.riskScore}>
+                  Predicted Risk Score: {(selectedUser.footAssessment.foot_risk_score * 100).toFixed(1)}%
+                </Text>
+                <Text style={styles.actualOutcome}>
+                  Actual Observation: {(selectedUser.footAssessment.observed_foot)}
+                </Text>
+
+                <Text style={styles.subSectionTitle}>Medical History</Text>
+                <View style={styles.detailsGrid}>
+                <DetailItem label="Amputation History" value={selectedUser.footAssessment.history_amputation} />
+                  <DetailItem label="Foot Ulcer History" value={selectedUser.footAssessment.history_foot_ulcer} />
+                  <DetailItem label="Calf Pain History" value={selectedUser.footAssessment.history_calf_pain} />
+                  <DetailItem label="Healing Wound History" value={selectedUser.footAssessment.history_healing_wound} />
+                </View>
+
+                <Text style={styles.subSectionTitle}>Current Symptoms</Text>
+                <View style={styles.detailsGrid}>
+                  <DetailItem label="Pain Level" value={selectedUser.footAssessment.pain.toString()} />
+                  <DetailItem label="Numbness Level" value={selectedUser.footAssessment.numbness.toString()} />
+                  <DetailItem label="Sensation Level" value={selectedUser.footAssessment.sensation.toString()} />
+                  <DetailItem label="Redness Level" value={selectedUser.footAssessment.redness.toString()} />
+                  <DetailItem label="Swelling Level" value={selectedUser.footAssessment.swelling.toString()} />
+                  <DetailItem label="Recent Cut" value={selectedUser.footAssessment.recent_cut} />
+                </View>
+
+                <ValidationSection
+                  assessmentType="foot"
+                  riskScore={selectedUser.footAssessment.foot_risk_score}
+                  username={selectedUser.user.username}
+                  existingValidation={selectedUser.footValidation}
+                  onValidationSubmit={async (validation) => {
+                    await axios.post('http://192.168.48.114:5000/validations', validation);
+                    await fetchUserDetails(selectedUser.user.username);
+                  }}
+                />
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+    </Modal>
+  );
+
+  const renderUserItem = ({ item }: { item: User }) => (
+    <TouchableOpacity 
+      style={styles.userCard}
+      onPress={() => fetchUserDetails(item.username)}
+    >
+      <View style={styles.userHeader}>
+        <Text style={styles.userName}>{item.username}</Text>
+        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleDateString()}</Text>
+      </View>
+      <View style={styles.userDetails}>
+        <Text style={styles.userInfo}>Age: {item.age}</Text>
+        <Text style={styles.userInfo}>Gender: {item.gender}</Text>
+        <Text style={styles.userInfo}>Occupation: {item.occupation}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -112,10 +436,18 @@ export default function AdminDashboardScreen() {
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No user assessments found</Text>
+            <Text style={styles.emptyText}>No users found</Text>
           </View>
         }
       />
+
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+        </View>
+      )}
+
+      <UserDetailsModal />
     </View>
   );
 }
@@ -123,7 +455,7 @@ export default function AdminDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f4f8',
+    backgroundColor: '#D3D3D3',
   },
   header: {
     flexDirection: 'row',
@@ -162,6 +494,7 @@ const styles = StyleSheet.create({
   userHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
   },
   userName: {
@@ -169,25 +502,135 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
   },
-  assessmentCount: {
-    color: '#2196F3',
-    fontWeight: 'bold',
+  timestamp: {
+    fontSize: 12,
+    color: '#7f8c8d',
   },
-  scoreContainer: {
+  userDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  userInfo: {
+    color: '#7f8c8d',
+    fontSize: 14,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f0f4f8',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  closeButton: {
+    padding: 10,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: '#2c3e50',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginLeft: 10,
+  },
+  navigationButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 20,
+    paddingHorizontal: 10,
   },
-  scoreItem: {
+  navButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    marginHorizontal: 5,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
   },
-  scoreLabel: {
-    color: '#7f8c8d',
-    fontSize: 12,
+  navButtonActive: {
+    backgroundColor: '#2196F3',
   },
-  scoreValue: {
+  navButtonText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  navButtonTextActive: {
+    color: 'white',
+  },
+  section: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  subSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  riskScore: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2196F3',
+    marginBottom: 15,
+  },
+  actualOutcome: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF0000',
+    marginBottom: 15,
+  },
+  detailsGrid: {
+    flexDirection: 'column',
+  },
+  detailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f4f8',
+  },
+  detailLabel: {
+    color: '#7f8c8d',
+    fontSize: 14,
+    flex: 1,
+  },
+  detailValue: {
+    color: '#2c3e50',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyContainer: {
     flex: 1,
@@ -198,5 +641,98 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     color: '#7f8c8d',
-  }
+  },
+  validationSection: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#fafafa',
+    borderRadius: 8,
+  },
+  validationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#2c3e50',
+  },
+  validationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  validationLabel: {
+    fontSize: 14,
+    color: '#2c3e50',
+    flex: 1,
+  },
+  validationButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  validationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  validationButtonSelected: {
+    borderColor: 'transparent',
+  },
+  validationButtonText: {
+    fontSize: 20,
+    color: '#666',
+  },
+  validationButtonTextSelected: {
+    color: 'white',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  ratingButton: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  ratingButtonSelected: {
+    backgroundColor: '#2196F3',
+    borderColor: 'transparent',
+  },
+  ratingButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  ratingButtonTextSelected: {
+    color: 'white',
+  },
+  feedbackContainer: {
+    marginBottom: 15,
+  },
+  feedbackInput: {
+    marginTop: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  submitButton: {
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

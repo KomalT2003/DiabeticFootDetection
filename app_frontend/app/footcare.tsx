@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  ScrollView, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,9 +14,11 @@ import Slider from '@react-native-community/slider';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
+import FootImagePicker from '@/components/FootImagePicker';
 
 export default function FootCareScreen() {
   const { user } = useAuth();
+  const [footRiskScore, setFootRiskScore] = useState(0.2);
   const [formData, setFormData] = useState({
     // Medical History
     username: user?.username,
@@ -24,14 +26,15 @@ export default function FootCareScreen() {
     history_foot_ulcer: '',
     history_calf_pain: '',
     history_healing_wound: '',
-    
+
     // Current Foot Condition
     redness: 0,
     swelling: 0,
     pain: 0,
     numbness: 0,
     sensation: 0,
-    recent_cut: ''
+    recent_cut: '',
+    observed_foot: '',
   });
 
   const [images, setImages] = useState<string[]>([]);
@@ -51,6 +54,17 @@ export default function FootCareScreen() {
     }
   };
 
+  const captureImage = async () => {
+    let result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImages(prevImages => [...prevImages, result.assets[0].uri]);
+    }
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
@@ -60,35 +74,78 @@ export default function FootCareScreen() {
       Object.entries(formData).forEach(([key, value]) => {
         submitFormData.append(key, value !== null ? value.toString() : '');
       });
-
-      // Add images
-      images.forEach((image, index) => {
+  
+      // Log the images array first
+      console.log('Images array:', images);
+      
+      // Add all images as an array
+      images.forEach((uri, index) => {
+        // Create file name based on index
+        const fileName = `image-${index}.jpg`;
+        console.log(`Adding image ${index}:`, fileName);
+        
+        // Create file object from uri
         submitFormData.append('images', {
-          uri: image,
+          uri: uri,
           type: 'image/jpeg',
-          name: `image-${index}.jpg`
-        } as any);
+          name: fileName
+        });
       });
-
-      const response = await axios.post('http://192.168.128.114:5000/predict_diabetic_foot', submitFormData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
+  
+      // Log the entire FormData
+      for (let [key, value] of submitFormData.entries()) {
+        console.log(`${key}:`, value);
+      }
+  
+      // First get prediction
+      console.log('Sending prediction request...');
+      const predictionResponse = await axios.post(
+        'http://192.168.48.114:5000/predict_diabetic_foot',
+        submitFormData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
         }
-      });
-
-      // if response1 is okay, then I want to call the prediction endpoint
-      const score = `${response.data.score.toFixed(2) * 100}%`;
-      setResult(score);
-      setModalVisible(true); // Show modal when result is received
+      );
+  
+      console.log('Prediction response:', predictionResponse.data);
+      const score = predictionResponse.data.score;
+      
+      // Add score to form data
+      submitFormData.append('foot_risk_score', score.toFixed(2));
+  
+      // Then save record
+      console.log('Sending save request...');
+      const saveResponse = await axios.post(
+        'http://192.168.48.114:5000/add_diabetic_foot',
+        submitFormData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      );
+  
+      console.log('Save response:', saveResponse.data);
+  
+      // Show result
+      setResult(`${(score * 100).toFixed(2)}%`);
+      setModalVisible(true);
       
     } catch (error) {
       console.error('Submission error:', error);
-      alert('Failed to submit assessment');
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        alert(`Error: ${JSON.stringify(error.response.data)}`);
+      } else {
+        alert(error.message || 'Failed to submit assessment');
+      }
     } finally {
       setLoading(false);
     }
   };
-
+  
   const renderSlider = (field: string, value: number, title: string) => (
     <View style={styles.sliderContainer}>
       <Text style={styles.sliderLabel}>{title}: {value}</Text>
@@ -110,27 +167,27 @@ export default function FootCareScreen() {
     <View style={styles.yesNoContainer}>
       <Text style={styles.yesNoLabel}>{label}</Text>
       <View style={styles.yesNoButtonGroup}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.yesNoButton, 
+            styles.yesNoButton,
             formData[field] === 'yes' && styles.selectedButton
           ]}
           onPress={() => setFormData(prev => ({ ...prev, [field]: 'yes' }))}
         >
           <Text style={[
-            styles.yesNoButtonText, 
+            styles.yesNoButtonText,
             formData[field] === 'yes' && styles.selectedButtonText
           ]}>Yes</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.yesNoButton, 
+            styles.yesNoButton,
             formData[field] === 'no' && styles.selectedButton
           ]}
           onPress={() => setFormData(prev => ({ ...prev, [field]: 'no' }))}
         >
           <Text style={[
-            styles.yesNoButtonText, 
+            styles.yesNoButtonText,
             formData[field] === 'no' && styles.selectedButtonText
           ]}>No</Text>
         </TouchableOpacity>
@@ -138,21 +195,69 @@ export default function FootCareScreen() {
     </View>
   );
 
+  const renderObservationOptions = () => (
+    <View style={styles.observationContainer}>
+      <Text style={styles.observationLabel}>
+        What was the observation. Did patient have diabetic Foot Complications?
+      </Text>
+      <View style={styles.observationButtonGroup}>
+        <TouchableOpacity
+          style={[
+            styles.observationButton,
+            formData.observed_foot === 'yes_clear' && styles.selectedButton
+          ]}
+          onPress={() => setFormData(prev => ({ ...prev, observed_foot: 'yes_clear' }))}
+        >
+          <Text style={[
+            styles.observationButtonText,
+            formData.observed_foot === 'yes_clear' && styles.selectedButtonText
+          ]}>Yes. Very clear</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.observationButton,
+            formData.observed_foot === 'no' && styles.selectedButton
+          ]}
+          onPress={() => setFormData(prev => ({ ...prev, observed_foot: 'no' }))}
+        >
+          <Text style={[
+            styles.observationButtonText,
+            formData.observed_foot === 'no' && styles.selectedButtonText
+          ]}>No</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.observationButton,
+            formData.observed_foot === 'maybe' && styles.selectedButton
+          ]}
+          onPress={() => setFormData(prev => ({ ...prev, observed_foot: 'maybe' }))}
+        >
+          <Text style={[
+            styles.observationButtonText,
+            formData.observed_foot === 'maybe' && styles.selectedButtonText
+          ]}>Maybe may develop</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <Text style={styles.title}>Diabetic Foot Health Assessment</Text>
-        
+
         {/* Medical History */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Medical History</Text>
           {renderYesNoButton('history_amputation', 'History of Amputation')}
           {renderYesNoButton('history_foot_ulcer', 'History of Foot Ulcer')}
           {renderYesNoButton('history_calf_pain', 'History of Calf Pain')}
-          {renderYesNoButton('history_healing_wound', 'History of Healing Wound')}
+          {renderYesNoButton('history_healing_wound', 'History of Delayed \Healing Wound')}
         </View>
 
         {/* Current Foot Condition */}
@@ -164,6 +269,7 @@ export default function FootCareScreen() {
           {renderSlider('numbness', formData.numbness, 'Numbness Level')}
           {renderSlider('sensation', formData.sensation, 'Sensation Level')}
           {renderYesNoButton('recent_cut', 'Recent Cut')}
+          {renderObservationOptions()}
         </View>
 
         {/* Image Upload Section */}
@@ -174,14 +280,17 @@ export default function FootCareScreen() {
               {images.length > 0 ? `${images.length} image(s) selected` : 'Select Foot Images'}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.imagePicker} onPress={captureImage}>
+            <Text style={styles.imagePickerText}>Use Camera to Capture Foot Image</Text>
+          </TouchableOpacity>
 
           {images.length > 0 && (
             <ScrollView horizontal style={styles.imagePreview}>
               {images.map((uri, index) => (
-                <Image 
-                  key={index} 
-                  source={{ uri }} 
-                  style={styles.previewImage} 
+                <Image
+                  key={index}
+                  source={{ uri }}
+                  style={styles.previewImage}
                 />
               ))}
             </ScrollView>
@@ -189,7 +298,7 @@ export default function FootCareScreen() {
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.submitButton}
           onPress={handleSubmit}
           disabled={loading}
@@ -210,8 +319,8 @@ export default function FootCareScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Risk Assessment Result</Text>
               <Text style={styles.modalScore}>{result}</Text>
-              <TouchableOpacity 
-                style={styles.closeButton} 
+              <TouchableOpacity
+                style={styles.closeButton}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.closeButtonText}>Close</Text>
@@ -256,6 +365,32 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
     color: '#008080', // Teal color
+  },
+  observationContainer: {
+    marginVertical: 10,
+    padding: 10,
+  },
+  observationLabel: {
+    fontSize: 16,
+    marginBottom: 10,
+    color: '#333',
+    fontWeight: '500',
+  },
+  observationButtonGroup: {
+    flexDirection: 'column',
+    gap: 10,
+  },
+  observationButton: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#20b2aa',
+    backgroundColor: 'white',
+  },
+  observationButtonText: {
+    textAlign: 'center',
+    color: '#20b2aa',
+    fontSize: 16,
   },
   sliderContainer: {
     marginBottom: 15,

@@ -46,7 +46,7 @@ export default function UserRegistrationScreen() {
     }
 
     try {
-      const response = await axios.post('http://192.168.128.114:5000/users', {
+      const response = await axios.post('http://192.168.48.114:5000/users', {
         ...formData,
         height: parseInt(formData.height),
         weight: parseInt(formData.weight)
@@ -119,26 +119,36 @@ export default function UserRegistrationScreen() {
         />
         
         {/* Physical Activity Picker */}
-        <Text style={styles.resultText}>Physical Activity Level</Text>
-        <View style={styles.pickerContainer}>
-          {['Low', 'Moderate', 'High'].map((activity) => (
-            <TouchableOpacity
-              key={activity}
-              style={[
-                styles.pickerButton,
-                formData.physical_activity === activity && styles.selectedPicker
-              ]}
-              onPress={() => updateField('physical_activity', activity)}
-            >
-              <Text style={[
-                styles.pickerText,
-                formData.physical_activity === activity && styles.selectedPickerText
-              ]}>
-                {activity}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+<Text style={styles.resultText}>Physical Activity Level</Text>
+<View style={styles.cardContainer}>
+  {[
+    {
+      level: 'Low',
+      description: 'Less than 30 minutes of walking or light exercise per week. Simple movements like chores or short walk',
+    },
+    {
+      level: 'Moderate',
+      description: 'Brisk walking, cycling, or moderate sports for at least 30 minutes a day, 5 days a week, about 150 minutes of activity weekly.',
+    },
+    {
+      level: 'High',
+      description: 'Vigorous activities like running/aerobics for 20 minutes a day, 3 days a week, greater than 300 minutes of activity weekly.',
+    },
+  ].map((activity) => (
+    <TouchableOpacity
+      key={activity.level}
+      style={[
+        styles.card,
+        formData.physical_activity === activity.level && styles.selectedCard,
+      ]}
+      onPress={() => updateField('physical_activity', activity.level)}
+    >
+      <Text style={styles.cardTitle}>{activity.level}</Text>
+      <Text style={styles.cardDescription}>{activity.description}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+
 
         <TouchableOpacity 
           style={[
@@ -262,12 +272,6 @@ const styles = StyleSheet.create({
     color: '#2196F3',
     marginBottom: 15,
   },
-  resultText: {
-    fontSize: 18,
-    color: '#2196F3',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
   modalCloseButton: {
     backgroundColor: '#2196F3',
     padding: 10,
@@ -279,5 +283,42 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-  }
+  },
+  resultText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#2196F3',
+      marginBottom: 10,
+    },
+    cardContainer: {
+      flexDirection: 'column',
+      gap: 15,
+      marginTop: 10,
+    },
+    card: {
+      backgroundColor: 'white',
+      borderWidth: 1,
+      borderColor: '#2196F3',
+      borderRadius: 10,
+      padding: 15,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 5,
+      elevation: 3,
+    },
+    selectedCard: {
+      backgroundColor: '#a2d3fa',
+      borderColor: '#023054',
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: 'dodgerblue',
+      marginBottom: 5,
+    },
+    cardDescription: {
+      fontSize: 14,
+      color: '#808080',
+    },
+  
 });
