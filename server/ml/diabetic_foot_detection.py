@@ -13,8 +13,8 @@ def predict_diabetic_foot(data):
     # redness : 0.11
     # swelling : 0.11
     # pain : 0.11
-    # numbness : 0.11
-    # sensation : 0.11
+    # numbness : 0.22
+    # sensation : -0.11
 
 
     # recent_cut : 0.04
@@ -23,7 +23,7 @@ def predict_diabetic_foot(data):
     # back_image : 1
     # front_image : 1
 
-    weights = np.array([0.15, 0.1, 0.03, 0.02, 0.11, 0.11, 0.11, 0.11, 0.11, 0.04, 0.11])
+    weights = np.array([0.15, 0.1, 0.03, 0.02, 0.11, 0.11, 0.11, 0.22, -0.11, 0.04, 0.11])
 
     # we will get input data in json
     # convert it to pandas dataframe

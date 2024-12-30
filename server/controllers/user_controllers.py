@@ -3,7 +3,7 @@ import json
 from server import db
 from server.models.users import User
 
-def add_user(username, password, age, gender, occupation, height, weight, physical_activity):
+def add_user(username, password, age, gender, occupation, height, weight, physical_activity, id=None):
     new_user = User(username, password,age, gender, occupation, height, weight, physical_activity)
     db.session.add(new_user)
     db.session.commit()

@@ -14,53 +14,53 @@ from server.models.diabetic_foot import DiabeticFoot
     # numbness = db.Column(db.Integer)
     # sensation = db.Column(db.Integer)
     # recent_cut = db.Column(db.String(80))
+    # foot_risk_score = db.Column(db.Float)
+    # observed_foot = db.Column(db.String(80))
     
     # # Image columns with file path storage
     # image_back = db.Column(db.String(255))
     # image_front = db.Column(db.String(255))
 
-def add_diabetic_foot_record(username, history_amputation, history_foot_ulcer, history_calf_pain, history_healing_wound, redness, swelling, pain, numbness, sensation, recent_cut, back_image, front_image):
-    """
-    Add a diabetic foot record to the database
-    
-    :param username: Username of the user
-    :param history_amputation: History of amputation
-    :param history_foot_ulcer: History of foot ulcer
-    :param history_calf_pain: History of calf pain
-    :param history_healing_wound: History of healing wound
-    :param redness: Redness level
-    :param swelling: Swelling level
-    :param pain: Pain level
-    :param numbness: Numbness level
-    :param sensation: Sensation level
-    :param recent_cut: Recent cut
-    :param back_image: Back view image file
-    :param front_image: Front view image file
-    """
+def add_diabetic_foot_record(username, history_amputation, history_foot_ulcer, history_calf_pain,
+                           history_healing_wound, redness, swelling, pain, numbness,
+                           sensation, recent_cut, back_image, front_image, foot_risk_score, observed_foot):
+    try:
+        diabetic_foot = DiabeticFoot(
+            username=username,
+            history_amputation=history_amputation,
+            history_foot_ulcer=history_foot_ulcer,
+            history_calf_pain=history_calf_pain,
+            history_healing_wound=history_healing_wound,
+            redness=redness,
+            swelling=swelling,
+            pain=pain,
+            numbness=numbness,
+            sensation=sensation,
+            recent_cut=recent_cut,
+            foot_risk_score=foot_risk_score,
+            observed_foot=  observed_foot
+        )
+        
+        # Save the record first to generate an ID
+        db.session.add(diabetic_foot)
+        db.session.commit()
+        
+        # Now upload the images
+        if front_image:
+            diabetic_foot.upload_image(front_image, 'front')
+        if back_image:
+            diabetic_foot.upload_image(back_image, 'back')
+            
+        # Save again with the image paths
+        db.session.commit()
+        
+        return diabetic_foot.id
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in add_diabetic_foot_record: {str(e)}")
+        raise e
 
-    diabetic_foot = DiabeticFoot(
-        username=username,
-        history_amputation=history_amputation,
-        history_foot_ulcer=history_foot_ulcer,
-        history_calf_pain=history_calf_pain,
-        history_healing_wound=history_healing_wound,
-        redness=redness,
-        swelling=swelling,
-        pain=pain,
-        numbness=numbness,
-        sensation=sensation,
-        recent_cut=recent_cut
-    )
-
-    # Save the record
-    db.session.add(diabetic_foot)
-    db.session.commit()
-
-    # Upload images
-    diabetic_foot.upload_image(back_image, 'back')
-    diabetic_foot.upload_image(front_image, 'front')
-
-    return diabetic_foot.id
 
 def get_diabetic_foot_record(username):
     """
@@ -69,8 +69,17 @@ def get_diabetic_foot_record(username):
     :param username: Username of the user
     :return: Serialized diabetic foot record
     """
-    diabetic_foot = DiabeticFoot.query.filter_by(username=username).first()
-    return diabetic_foot.serialize()
+    try:
+        diabetic_foot = DiabeticFoot.query.filter_by(username=username).first()
+        
+        if diabetic_foot is None:
+            return None
+            
+        return diabetic_foot.serialize()
+        
+    except Exception as e:
+        print(f"Error in get_diabetic_foot_record: {str(e)}")
+        return None
 
 def get_all_diabetic_foot_records():
     """

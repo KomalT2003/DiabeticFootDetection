@@ -30,6 +30,8 @@ def register_diabetes_routes(app):
         symptom_excessive_thirst = data['symptom_excessive_thirst']
         symptom_increased_urination = data['symptom_increased_urination']
         symptom_nausea = data['symptom_nausea']
+        diabetes_risk_score = data['diabetes_risk_score']
+        observed_diabetes = data['observed_diabetes']
 
         result = add_diabetes_detection(
             username,
@@ -51,15 +53,38 @@ def register_diabetes_routes(app):
             symptom_excessive_thirst,
             symptom_increased_urination,
             symptom_nausea,
+            diabetes_risk_score,
+            observed_diabetes
         )
         return jsonify(result)
 
     @app.route('/get_diabetic_detection', methods=['POST'])
     def get_diabetic_detection_route():
-        data = json.loads(request.data)
-        username = data['username']
-        result = get_diabetes_detection(username)
-        return jsonify(result)
+        try:
+            data = json.loads(request.data)
+            username = data.get('username')
+            
+            if not username:
+                return jsonify({
+                    'error': 'Username is required'
+                }), 400
+                
+            result = get_diabetes_detection(username)
+            
+            if result is None:
+                return jsonify({
+                    'message': 'No foot assessment record found for this user',
+                    'data': None
+                }), 200  # Return 200 with null data instead of 404
+                
+            return jsonify(result)
+            
+        except Exception as e:
+            print(f"Error in get_diabetic_foot_route: {str(e)}")
+            return jsonify({
+                'error': 'Internal server error',
+                'message': str(e)
+            }), 500
 
     @app.route('/get_all_diabetic_detection', methods=['GET'])
     def get_all_diabetic_detection_route():
@@ -69,6 +94,7 @@ def register_diabetes_routes(app):
     @app.route('/predict_diabetes', methods=['POST'])
     def predict_diabetes_route():
         data = json.loads(request.data)
+        data.pop('observed_diabetes', None)
         score = predict_diabetes(data)
 
         with open('results.json', 'a') as f:

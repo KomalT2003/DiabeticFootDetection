@@ -9,6 +9,8 @@ env/
 ENV/
 penv/
 pyenv/
+pythonenv/
+
 
 # logs
 *.log

@@ -24,11 +24,13 @@ def create_app():
     from server.routes.users import register_user_routes
     from server.routes.diabetes_detection import register_diabetes_routes
     from server.routes.diabetic_foot import register_diabetic_foot_routes
+    from server.routes.validations import register_validation_routes
 
     # Register routes after initializing the app
     register_user_routes(app)
     register_diabetes_routes(app)
     register_diabetic_foot_routes(app)
+    register_validation_routes(app)
 
     return app
 
@@ -38,7 +40,7 @@ def init_db(app):
     from server.models.users import User
     from server.models.diabetes_detection import DiabetesDetection
     from server.models.diabetic_foot import DiabeticFoot
-    from server.models.results import Results
+    from server.models.validations import Validation
     
     with app.app_context():
         # Create all the tables defined in models

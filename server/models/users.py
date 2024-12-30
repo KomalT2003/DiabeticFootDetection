@@ -1,10 +1,13 @@
 # create user model with demographics, username, password and unique user id
 
 from server import db
+from datetime import datetime
+
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     username = db.Column(db.String(80), unique=True)
     password = db.Column(db.String(80))
     age = db.Column(db.String(80)) # in range
@@ -13,8 +16,9 @@ class User(db.Model):
     height = db.Column(db.Integer)
     weight = db.Column(db.Integer)
     physical_activity = db.Column(db.String(80))
+    
 
-    def __init__(self, username, password, age, gender, occupation, height, weight, physical_activity):
+    def __init__(self, username, password, age, gender, occupation, height, weight, physical_activity, id=None):
         self.username = username
         self.password = password
         self.age = age
@@ -36,7 +40,8 @@ class User(db.Model):
             'occupation' : self.occupation,
             'height' : self.height,
             'weight' : self.weight,
-            'physical_activity' : self.physical_activity
+            'physical_activity' : self.physical_activity,
+            'timestamp': self.timestamp
         }
     
 # export

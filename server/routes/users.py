@@ -17,4 +17,5 @@ def register_user_routes(app):
     @app.route('/users', methods=['GET'])
     def get_all_users_route():
         users = get_all_users()
+        print(users)
         return jsonify(users), 200

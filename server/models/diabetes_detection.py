@@ -27,8 +27,10 @@ class DiabetesDetection(db.Model):
     symptom_excessive_thirst = db.Column(db.String(80))
     symptom_increased_urination = db.Column(db.String(80))
     symptom_nausea = db.Column(db.String(80))
+    diabetes_risk_score = db.Column(db.Float)
+    observed_diabetes = db.Column(db.String(80))
 
-    def __init__(self, username, high_glucose, close_family, far_family, waist_circumference, kidney, thyroid, blood_pressure, cholestral, heart_disease, smoke, alcohol, diet, symptom_fatigue, symptom_blurred_vision, symptom_fruiity_breath, symptom_excessive_thirst, symptom_increased_urination, symptom_nausea):
+    def __init__(self, username, high_glucose, close_family, far_family, waist_circumference, kidney, thyroid, blood_pressure, cholestral, heart_disease, smoke, alcohol, diet, symptom_fatigue, symptom_blurred_vision, symptom_fruiity_breath, symptom_excessive_thirst, symptom_increased_urination, symptom_nausea, diabetes_risk_score, observed_diabetes, id=None):
         self.username = username
         self.high_glucose = high_glucose
         self.close_family = close_family
@@ -48,6 +50,9 @@ class DiabetesDetection(db.Model):
         self.symptom_excessive_thirst = symptom_excessive_thirst
         self.symptom_increased_urination = symptom_increased_urination
         self.symptom_nausea = symptom_nausea
+        self.diabetes_risk_score = diabetes_risk_score
+        self.observed_diabetes = observed_diabetes
+        
 
     def __repr__(self):
         print("Hello")
@@ -61,6 +66,8 @@ class DiabetesDetection(db.Model):
                 'waist_circumference', 'kidney', 'thyroid', 'blood_pressure', 
                 'cholestral', 'heart_disease', 'smoke', 'alcohol', 'diet', 
                 'symptom_fatigue', 'symptom_blurred_vision', 'symptom_fruiity_breath', 
-                'symptom_excessive_thirst', 'symptom_increased_urination', 'symptom_nausea'
+                'symptom_excessive_thirst', 'symptom_increased_urination', 'symptom_nausea', 'diabetes_risk_score',
+                'observed_diabetes'
+                
             ]}
         }
