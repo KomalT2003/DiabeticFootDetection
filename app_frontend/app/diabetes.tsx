@@ -8,6 +8,7 @@ import {
   Modal 
 } from 'react-native';
 import axios from 'axios';
+import * as Speech from 'expo-speech';
 import { useAuth } from '../context/AuthContext';
 
 interface Question {
@@ -89,7 +90,7 @@ const DIABETES_QUESTIONS: Question[] = [{
 {
   id: 'diet',
   text: 'Select your typical diet patterns:',
-  type: 'multiple',
+  type: 'single',
   options: ['High in processed foods', 'High in sugary drinks', 'Low in fruits and vegetables', 'High in fried food', 'High in outside food']
 },
 {
@@ -192,14 +193,14 @@ export default function DiabetesAssessmentScreen() {
       }
   
       const response = await axios.post(
-        'http://192.168.48.114:5000/predict_diabetes',
+        'http://192.168.38.114:5000/predict_diabetes',
         formData
       );
       const diabetes_risk_score = response.data.score.toFixed(2) * 100;
 
       // add diabetes_risk_score to post 
       const add_record = await axios.post(
-        'http://192.168.48.114:5000/add_diabetic_detection',
+        'http://192.168.38.114:5000/add_diabetic_detection',
         {
           username: formData.username,
           high_glucose: formData.high_glucose,
@@ -237,6 +238,10 @@ export default function DiabetesAssessmentScreen() {
       console.error('Assessment submission error:', error);
       alert('Failed to submit assessment');
     }
+  };
+
+  const readText = (text: string) => {
+    Speech.speak(text, { pitch: 1.0, rate: 1.0 });
   };
 
   const renderQuestionOptions = (question: Question) => {

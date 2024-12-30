@@ -24,7 +24,7 @@ export default function LoginScreen() {
       const success = await login(username, password);
       if (success) {
         // Redirect based on user role
-        if (username === 'admin') {
+        if (username === 'admin' || username === 'Mariya' || username === 'Taranga') {
           router.replace('/admin/dashboard');
         } else {
           router.replace('/home');

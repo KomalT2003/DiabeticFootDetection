@@ -46,7 +46,7 @@ export default function UserRegistrationScreen() {
     }
 
     try {
-      const response = await axios.post('http://192.168.48.114:5000/users', {
+      const response = await axios.post('http://192.168.38.114:5000/users', {
         ...formData,
         height: parseInt(formData.height),
         weight: parseInt(formData.weight)

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
+import axios, { all } from 'axios';
 
 // Interfaces
 interface User {
@@ -89,46 +89,116 @@ const VIEWS = {
   DEMOGRAPHICS: 'demographics',
   DIABETES: 'diabetes',
   FOOT: 'foot'
-};
+} as const;
+
+const TABS = {
+  PENDING: 'pending',
+  SUBMITTED: 'submitted'
+} as const;
 
 export default function AdminDashboardScreen() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [validatedUsers, setValidatedUsers] = useState<User[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [currentView, setCurrentView] = useState(VIEWS.DEMOGRAPHICS);
+  const [currentView, setCurrentView] = useState<typeof VIEWS[keyof typeof VIEWS]>(VIEWS.DEMOGRAPHICS);
+  const [currentTab, setCurrentTab] = useState<typeof TABS[keyof typeof TABS]>(TABS.PENDING);
   const router = useRouter();
   const { logout } = useAuth();
 
   useEffect(() => {
-    fetchUsers();
+    fetchInitialData();
   }, []);
 
-  const fetchUsers = async () => {
+
+  const fetchInitialData = async () => {
+    setLoading(true);
     try {
-      const response = await axios.get('http://192.168.48.114:5000/users');
-      setUsers(response.data);
+      const [allUsersResponse, validatedResponse] = await Promise.all([
+        axios.get('http://192.168.38.114:5000/users'),
+        axios.get('http://192.168.38.114:5000/validations')
+      ]);
+
+      const allUsersData = allUsersResponse.data;
+      const validatedData = validatedResponse.data;
+
+      // Get unique validated usernames (both diabetes and foot assessments)
+      const validatedUsernames = [...new Set(validatedData.map((validation: any) => 
+        validation.username.trim()
+      ))];
+
+      setAllUsers(allUsersData.map((user: User) => ({
+        ...user,
+        username: user.username.trim()
+      })));
+      
+      setValidatedUsers(validatedUsernames);
+      
+      const pendingUsersList = allUsersData.filter((user: User) => 
+        !validatedUsernames.includes(user.username.trim())
+      );
+      setPendingUsers(pendingUsersList);
+
     } catch (error) {
-      console.error('Failed to fetch users', error);
-      Alert.alert('Error', 'Failed to fetch users');
+      console.error('Failed to fetch data', error);
+      Alert.alert('Error', 'Failed to fetch dashboard data');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Update the filteredUsers calculation
+  const filteredUsers = React.useMemo(() => {
+    if (currentTab === TABS.PENDING) {
+      return allUsers.filter(user => !validatedUsers.includes(user.username.trim()));
+    } else {
+      return allUsers.filter(user => validatedUsers.includes(user.username.trim()));
+    }
+  }, [currentTab, validatedUsers, allUsers]);
+
+  // Add a useEffect to monitor state changes
+  useEffect(() => {
+    console.log('State Updated:', {
+      validatedUsers,
+      allUsersCount: allUsers.length,
+      pendingUsersCount: pendingUsers.length,
+      currentTab,
+      filteredUsersCount: filteredUsers.length
+    });
+  }, [validatedUsers, allUsers, pendingUsers, currentTab, filteredUsers]);
+
 
   const fetchUserDetails = async (username: string) => {
     setLoading(true);
     try {
-      const [diabetesResponse, footResponse] = await Promise.all([
-        axios.post('http://192.168.48.114:5000/get_diabetic_detection', { username }),
-        axios.post('http://192.168.48.114:5000/get_diabetic_foot', { username }),
+      const [diabetesResponse, footResponse, validationsResponse] = await Promise.all([
+        axios.post('http://192.168.38.114:5000/get_diabetic_detection', { username }),
+        axios.post('http://192.168.38.114:5000/get_diabetic_foot', { username }),
+        axios.get('http://192.168.38.114:5000/validations')
       ]);
-
+  
+      const user = allUsers.find(u => u.username === username);
+      if (!user) throw new Error('User not found');
+      
+      
+      const validations = validationsResponse.data;
+      const diabetesValidation = validations.find(
+        (v: ValidationResult) => v.username === username && v.assessment_type === 'diabetes'
+      );
+      const footValidation = validations.find(
+        (v: ValidationResult) => v.username === username && v.assessment_type === 'foot'
+      );
+  
       const userDetails: UserDetails = {
-        user: users.find(u => u.username === username)!,
+        user,
         diabetesAssessment: diabetesResponse.data,
-        footAssessment: footResponse.data,
-        
+        footAssessment: footResponse.data, 
+        diabetesValidation,
+        footValidation
       };
-
+  
       setSelectedUser(userDetails);
       setModalVisible(true);
     } catch (error) {
@@ -138,23 +208,49 @@ export default function AdminDashboardScreen() {
       setLoading(false);
     }
   };
+  
 
-  const ValidationSection = ({ 
-    assessmentType,
-    riskScore,
-    username,
-    existingValidation,
-    onValidationSubmit 
-  }) => {
-    const [isCorrect, setIsCorrect] = useState<boolean>(existingValidation?.is_correct ?? false);
-    const [riskRating, setRiskRating] = useState<number>(existingValidation?.risk_rating ?? 1);
-    const [feedback, setFeedback] = useState<string>(existingValidation?.feedback ?? '');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const ValidationSection: React.FC<ValidationSectionProps> = ({ 
+      assessmentType,
+      riskScore,
+      username,
+      existingValidation,
+      onValidationSubmit 
+    }) => {
+      const [isCorrect, setIsCorrect] = useState<boolean>(existingValidation?.is_correct ?? false);
+      const [riskRating, setRiskRating] = useState<number>(existingValidation?.risk_rating ?? 1);
+      const [feedback, setFeedback] = useState<string>(existingValidation?.feedback ?? '');
+      const [isSubmitting, setIsSubmitting] = useState(false);
+  
+      const handleSubmit = async () => {
+        setIsSubmitting(true);
+        try {
+          const validationData = {
+            username,
+            assessment_type: assessmentType,
+            [`validation_${assessmentType}_correct`]: isCorrect ? 'true' : 'false',
+            [`validation_${assessmentType}_rating`]: riskRating.toString(),
+            [`validation_${assessmentType}_feedback`]: feedback
+          };
+  
+          await axios.post('http://192.168.38.114:5000/add_validation', validationData);
+          
+          // Refresh all data after successful validation
+          await fetchInitialData();
+          
+          if (onValidationSubmit) {
+            await onValidationSubmit();
+          }
+  
+          Alert.alert('Success', 'Validation saved successfully');
+        } catch (error) {
+          console.error('Error saving validation:', error);
+          Alert.alert('Error', 'Failed to save validation. Please try again.');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
 
-    const handleSubmit = async () => {
-      
-        Alert.alert('Success', 'Validation saved successfully');
-    };
 
     return (
       <View style={styles.validationSection}>
@@ -344,8 +440,8 @@ export default function AdminDashboardScreen() {
                   riskScore={selectedUser.diabetesAssessment.diabetes_risk_score}
                   username={selectedUser.user.username}
                   existingValidation={selectedUser.diabetesValidation}
-                  onValidationSubmit={async (validation) => {
-                    await axios.post('http://192.168.48.114:5000/validations', validation);
+                  onValidationSubmit={async () => {
+                    // Only fetch updated details, no need to post again
                     await fetchUserDetails(selectedUser.user.username);
                   }}
                 />
@@ -355,7 +451,10 @@ export default function AdminDashboardScreen() {
             {currentView === VIEWS.FOOT && selectedUser.footAssessment && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Foot Assessment</Text>
-                <Text style={styles.riskScore}>
+                {
+                  selectedUser.footAssessment? (
+                  <>
+                  <Text style={styles.riskScore}>
                   Predicted Risk Score: {(selectedUser.footAssessment.foot_risk_score * 100).toFixed(1)}%
                 </Text>
                 <Text style={styles.actualOutcome}>
@@ -385,11 +484,14 @@ export default function AdminDashboardScreen() {
                   riskScore={selectedUser.footAssessment.foot_risk_score}
                   username={selectedUser.user.username}
                   existingValidation={selectedUser.footValidation}
-                  onValidationSubmit={async (validation) => {
-                    await axios.post('http://192.168.48.114:5000/validations', validation);
+                  onValidationSubmit={async () => {
+                    // Only fetch updated details, no need to post again
                     await fetchUserDetails(selectedUser.user.username);
                   }}
                 />
+                </>) : (
+                  <Text style={styles.noDataText}>No foot assessment data available for this user</Text>
+                )}
               </View>
             )}
           </>
@@ -415,6 +517,7 @@ export default function AdminDashboardScreen() {
     </TouchableOpacity>
   );
 
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -429,14 +532,35 @@ export default function AdminDashboardScreen() {
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tabButton, currentTab === TABS.PENDING && styles.activeTab]}
+          onPress={() => setCurrentTab(TABS.PENDING)}
+        >
+          <Text style={[styles.tabText, currentTab === TABS.PENDING && styles.activeTabText]}>
+            Pending ({allUsers.length - validatedUsers.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tabButton, currentTab === TABS.SUBMITTED && styles.activeTab]}
+          onPress={() => setCurrentTab(TABS.SUBMITTED)}
+        >
+          <Text style={[styles.tabText, currentTab === TABS.SUBMITTED && styles.activeTabText]}>
+            Submitted ({validatedUsers.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
       
       <FlatList
-        data={users}
+        data={filteredUsers}
         renderItem={renderUserItem}
         keyExtractor={(item) => item.id}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No users found</Text>
+            <Text style={styles.emptyText}>
+              {currentTab === TABS.PENDING ? 'No pending validations' : 'No submitted validations'}
+            </Text>
           </View>
         }
       />
@@ -456,6 +580,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#D3D3D3',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#2196F3',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#2196F3',
+    fontWeight: 'bold',
   },
   header: {
     flexDirection: 'row',
@@ -563,6 +712,12 @@ const styles = StyleSheet.create({
   },
   navButtonTextActive: {
     color: 'white',
+  },
+  noDataText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginVertical: 20,
   },
   section: {
     backgroundColor: 'white',

@@ -100,7 +100,7 @@ export default function FootCareScreen() {
       // First get prediction
       console.log('Sending prediction request...');
       const predictionResponse = await axios.post(
-        'http://192.168.48.114:5000/predict_diabetic_foot',
+        'http://192.168.38.114:5000/predict_diabetic_foot',
         submitFormData,
         {
           headers: {
@@ -118,7 +118,7 @@ export default function FootCareScreen() {
       // Then save record
       console.log('Sending save request...');
       const saveResponse = await axios.post(
-        'http://192.168.48.114:5000/add_diabetic_foot',
+        'http://192.168.38.114:5000/add_diabetic_foot',
         submitFormData,
         {
           headers: {
